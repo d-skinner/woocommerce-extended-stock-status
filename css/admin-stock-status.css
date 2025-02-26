@@ -1,0 +1,21 @@
+/* css/admin-stock-status.css */
+table.wp-list-table mark.preorder,
+table.wp-list-table mark.enquiries,
+table.wp-list-table mark.discontinued
+{
+	font-weight: 700;
+	background: transparent none;
+	line-height: 1;
+}
+
+td.is_in_stock.column-is_in_stock .preorder {
+    color: #2eb2cc; /* Blue for Pre-order */
+}
+
+td.is_in_stock.column-is_in_stock .enquiries {
+    color: #9e22e6; /* Purple for Enquiries Only */
+}
+
+td.is_in_stock.column-is_in_stock .discontinued {
+    color: #888888; /* Grey for Discontinued */
+}

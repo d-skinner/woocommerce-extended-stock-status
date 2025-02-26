@@ -1,15 +1,19 @@
 /* css/stock-status.css */
+.stock::before
+{
+	content: 'Availability: ';
+	color:#000;
+	font-weight: bold;
+}
+
 .pre-order {
     color: #2ecc71 !important;
-    font-weight: bold;
 }
 
 .enquiries-only {
     color: #e67e22 !important;
-    font-weight: bold;
 }
 
 .discontinued {
     color: #e74c3c !important;
-    font-weight: bold;
 }
