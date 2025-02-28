@@ -31,8 +31,13 @@ if (in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_
             add_filter('woocommerce_get_availability', array($this, 'custom_stock_availability'), 10, 2);
             add_filter('woocommerce_is_purchasable', array($this, 'control_purchasability'), 10, 2);
             add_filter('woocommerce_product_single_add_to_cart_text', array($this, 'custom_add_to_cart_text'), 10, 2); // Add filter for Add to Cart button text
-            add_filter('woocommerce_product_add_to_cart_text', array($this, 'custom_add_to_cart_text'), 10, 2); // Add "Pre-order" on archive/shop pages
+            //add_filter('woocommerce_product_add_to_cart_text', array($this, 'custom_add_to_cart_text'), 10, 2); // Add "Pre-order" on archive/shop pages
+            add_filter('woocommerce_loop_add_to_cart_link', array($this, 'customize_add_to_cart_button_html'), 10, 3);
             add_filter('woocommerce_get_item_data', array($this, 'add_availability_to_cart'), 10, 2); // Add availability to cart page
+            //add_action('pre_get_posts', array($this, 'move_discontinued_products_to_end')); // Hook into pre_get_posts to modify the main query
+            //add_action('elementor/query/archive_products', array($this, 'move_discontinued_products_to_end'));
+            add_filter('posts_join', array($this, 'join_postmeta'), 10, 2);
+            add_filter('posts_orderby', array($this, 'custom_orderby'), 10, 2);
 
             // Handle display on backend
             add_filter('woocommerce_product_stock_status_options', array($this, 'add_custom_stock_statuses')); // Add custom stock statuses
@@ -115,13 +120,49 @@ if (in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_
             return $purchasable;
         }
 
+        public function customize_add_to_cart_button_html($link, $product, $args) {
+            // Check the product's stock status
+            $stock_status = $product->get_stock_status();
+            
+            if ($stock_status === 'preorder' && get_option('wc_extended_stock_preorder_enabled', 'yes') === 'yes') {
+                return '<a href="' . esc_url($product->add_to_cart_url()) . '" class="button pre-order">Pre-order</a>';
+            }
+
+            if ($stock_status === 'enquiries' && get_option('wc_extended_stock_enquiries_enabled', 'yes') === 'yes') {
+                return '<a href="' . esc_url($product->add_to_cart_url()) . '" class="button enquiries-only">Enquiries</a>';
+            }
+
+            if ($stock_status === 'discontinued' && get_option('wc_extended_stock_discontinued_enabled', 'yes') === 'yes') {
+                return '<button class="button discontinued" disabled>Discontinued</button>';
+            }
+            
+            // Return the default button HTML for other products
+            return $link;
+        }
+        
+        
+
+
         public function custom_add_to_cart_text($text, $product) {
             $stock_status = $product->get_stock_status();
+
             if ($stock_status === 'preorder' && get_option('wc_extended_stock_preorder_enabled', 'yes') === 'yes') {
                 return __('Pre-order', 'wc-extended-stock');
             }
+            
+            if ($stock_status === 'enquiries' && get_option('wc_extended_stock_enquiries_enabled', 'yes') === 'yes') {
+                return __('Contact Us', 'wc-extended-stock');
+            }
+
+            if ($stock_status === 'discontinued' && get_option('wc_extended_stock_discontinued_enabled', 'yes') === 'yes') {
+                return __('Discontinued', 'wc-extended-stock');
+            }
+
             return $text; // Default "Add to cart" for other statuses
         }
+
+
+
 
         public function add_availability_to_cart($item_data, $cart_item) {
             $product = $cart_item['data'];
@@ -136,6 +177,53 @@ if (in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_
             }
             
             return $item_data;
+        }
+
+
+        public function join_postmeta($join, $query) {
+            if (!is_admin() && $query->is_main_query() && (is_shop() || is_product_category() || is_product_tag())) {
+                global $wpdb;
+                $join .= " LEFT JOIN {$wpdb->postmeta} ON {$wpdb->posts}.ID = {$wpdb->postmeta}.post_id AND {$wpdb->postmeta}.meta_key = '_stock_status'";
+            }
+            return $join;
+        }
+    
+        public function custom_orderby($orderby, $query) {
+            if (!is_admin() && $query->is_main_query() && (is_shop() || is_product_category() || is_product_tag())) {
+                global $wpdb;
+                $orderby = "CASE WHEN {$wpdb->postmeta}.meta_value = 'discontinued' THEN 1 ELSE 0 END ASC, " . $orderby;
+            }
+            return $orderby;
+        }
+
+
+        public function move_discontinued_products_to_end($query) {
+            if (!is_admin() && $query->is_main_query() && (is_shop() || is_product_category() || is_product_tag())) {
+                $discontinued_ids = $this->get_discontinued_product_ids();
+                if (!empty($discontinued_ids)) {
+                    $query->set('post__not_in', $discontinued_ids);
+                    add_action('woocommerce_product_query', function($q) use ($discontinued_ids) {
+                        $q->set('post__in', $discontinued_ids);
+                        $q->set('orderby', 'date');
+                        $q->set('order', 'DESC');
+                    }, 20);
+                }
+            }
+        }
+    
+        private function get_discontinued_product_ids() {
+            $args = array(
+                'post_type' => 'product',
+                'posts_per_page' => -1,
+                'fields' => 'ids',
+                'meta_query' => array(
+                    array(
+                        'key' => '_stock_status',
+                        'value' => 'discontinued',
+                    ),
+                ),
+            );
+            return get_posts($args);
         }
 
 
