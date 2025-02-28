@@ -6,14 +6,19 @@
 	font-weight: bold;
 }
 
+.cart_item dt.variation-Availability
+{
+    font-weight: bold;
+}
+
 .pre-order {
-    color: #2ecc71 !important;
+    color: #9f1510 !important;
 }
 
 .enquiries-only {
-    color: #e67e22 !important;
+    color: #9e22e6 !important;
 }
 
 .discontinued {
-    color: #e74c3c !important;
+    color: #888888 !important;
 }

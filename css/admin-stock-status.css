@@ -9,7 +9,7 @@ table.wp-list-table mark.discontinued
 }
 
 td.is_in_stock.column-is_in_stock .preorder {
-    color: #2eb2cc; /* Blue for Pre-order */
+    color: #9f1510; /* Blue for Pre-order */
 }
 
 td.is_in_stock.column-is_in_stock .enquiries {

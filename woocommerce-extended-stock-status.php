@@ -30,6 +30,9 @@ if (in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_
             // Handle display on frontend
             add_filter('woocommerce_get_availability', array($this, 'custom_stock_availability'), 10, 2);
             add_filter('woocommerce_is_purchasable', array($this, 'control_purchasability'), 10, 2);
+            add_filter('woocommerce_product_single_add_to_cart_text', array($this, 'custom_add_to_cart_text'), 10, 2); // Add filter for Add to Cart button text
+            add_filter('woocommerce_product_add_to_cart_text', array($this, 'custom_add_to_cart_text'), 10, 2); // Add "Pre-order" on archive/shop pages
+            add_filter('woocommerce_get_item_data', array($this, 'add_availability_to_cart'), 10, 2); // Add availability to cart page
 
             // Handle display on backend
             add_filter('woocommerce_product_stock_status_options', array($this, 'add_custom_stock_statuses')); // Add custom stock statuses
@@ -38,11 +41,14 @@ if (in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_
             // Add settings under Products tab
             add_filter('woocommerce_get_sections_products', array($this, 'add_stock_status_section'));
             add_filter('woocommerce_get_settings_products', array($this, 'add_stock_status_settings'), 10, 2);
+
+            // Add sync to WooCommerce Tools
+            add_filter('woocommerce_debug_tools', array($this, 'add_sync_tool')); // Hook into the WooCommerce tools filter
         }
 
         // Add basic styling
         public function enqueue_styles() {
-            if (is_product()) {
+            if (is_product() || is_cart()) {
                 wp_enqueue_style(
                     'wc-extended-stock-style',
                     plugin_dir_url(__FILE__) . 'css/stock-status.css',
@@ -63,6 +69,7 @@ if (in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_
                     '1.0.0'
                 );
             }
+            // Note: Add JS enqueue here later for popup
         }
 
         
@@ -108,16 +115,39 @@ if (in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_
             return $purchasable;
         }
 
+        public function custom_add_to_cart_text($text, $product) {
+            $stock_status = $product->get_stock_status();
+            if ($stock_status === 'preorder' && get_option('wc_extended_stock_preorder_enabled', 'yes') === 'yes') {
+                return __('Pre-order', 'wc-extended-stock');
+            }
+            return $text; // Default "Add to cart" for other statuses
+        }
+
+        public function add_availability_to_cart($item_data, $cart_item) {
+            $product = $cart_item['data'];
+            $stock_status = $product->get_stock_status();
+            
+            if ($stock_status === 'preorder' && get_option('wc_extended_stock_preorder_enabled', 'yes') === 'yes') {
+                $item_data[] = array(
+                    'key'     => __('Availability', 'wc-extended-stock'),
+                    'value'   => get_option('wc_extended_stock_preorder_text', __('Pre-order', 'wc-extended-stock')),
+                    'display' => '<span class="pre-order">' . esc_html(get_option('wc_extended_stock_preorder_text', __('Pre-order', 'wc-extended-stock'))) . '</span>',
+                );
+            }
+            
+            return $item_data;
+        }
+
 
         //* BACKEND */
 
         // Add new stock status options to dropdown
         public function add_custom_stock_statuses($stock_statuses) {
             if (get_option('wc_extended_stock_preorder_enabled', 'yes') === 'yes') {
-                $stock_statuses['preorder'] = __('Pre-order Now', 'wc-extended-stock');
+                $stock_statuses['preorder'] = __('Pre-order', 'wc-extended-stock');
             }
             if (get_option('wc_extended_stock_enquiries_enabled', 'yes') === 'yes') {
-                $stock_statuses['enquiries'] = __('Enquiries Only', 'wc-extended-stock');
+                $stock_statuses['enquiries'] = __('Enquiries', 'wc-extended-stock');
             }
             if (get_option('wc_extended_stock_discontinued_enabled', 'yes') === 'yes') {
                 $stock_statuses['discontinued'] = __('Discontinued', 'wc-extended-stock');
@@ -131,14 +161,78 @@ if (in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_
             
             switch ($stock_status) {
                 case 'preorder':
-                    return '<mark class="preorder">' . __('Pre-order Now', 'wc-extended-stock') . '</mark>';
+                    return '<mark class="preorder">' . __('Pre-order', 'wc-extended-stock') . '</mark>';
                 case 'enquiries':
-                    return '<mark class="enquiries">' . __('Enquiries Only', 'wc-extended-stock') . '</mark>';
+                    return '<mark class="enquiries">' . __('Enquiries', 'wc-extended-stock') . '</mark>';
                 case 'discontinued':
                     return '<mark class="discontinued">' . __('Discontinued', 'wc-extended-stock') . '</mark>';
                 default:
                     return $stock_html;
             }
+        }
+
+
+        // Add the Sync Stock Status tool to the Tools section
+        public function add_sync_tool($tools) {
+            $tools['sync_stock_status'] = array(
+                'name'     => __('Sync Stock Status', 'wc-extended-stock'),
+                'button'   => __('Run Sync', 'wc-extended-stock'),
+                'desc'     => __('Sync stock statuses based on the order_status meta for all products.', 'wc-extended-stock'),
+                'callback' => array($this, 'sync_stock_status_tool'),
+            );
+            return $tools;
+        }
+
+        // Callback function to execute the sync when the button is clicked
+        public function sync_stock_status_tool() {
+            // Check user permissions
+            if (!current_user_can('manage_woocommerce')) {
+                return __('Insufficient permissions to sync stock statuses.', 'wc-extended-stock');
+            }
+
+            // Access the WordPress database
+            global $wpdb;
+            $postmeta_table = $wpdb->postmeta;
+
+            // Fetch all products with the order_status meta
+            $results = $wpdb->get_results("
+                SELECT post_id, meta_value
+                FROM $postmeta_table
+                WHERE meta_key = 'order_status'
+            ");
+
+            // Handle database errors
+            if ($results === false) {
+                return __('Database error while syncing stock statuses.', 'wc-extended-stock');
+            }
+
+            // Process each product and update stock status
+            $updated = 0;
+            foreach ($results as $result) {
+                $post_id = $result->post_id;
+                $order_status = $result->meta_value;
+
+                switch ($order_status) {
+                    case '1':
+                        update_post_meta($post_id, '_stock_status', 'preorder');
+                        $updated++;
+                        break;
+                    case '2':
+                        update_post_meta($post_id, '_stock_status', 'enquiries');
+                        $updated++;
+                        break;
+                    case '3':
+                        // No action for this status
+                        break;
+                    case '4':
+                        update_post_meta($post_id, '_stock_status', 'discontinued');
+                        $updated++;
+                        break;
+                }
+            }
+
+            // Return feedback
+            return sprintf(__('Stock statuses synced successfully. Updated %d products.', 'wc-extended-stock'), $updated);
         }
 
 
@@ -211,7 +305,7 @@ if (in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_
             }
             return $settings;
         }
-    
+
     }
     
     // Initialize the plugin
