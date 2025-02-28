@@ -11,14 +11,34 @@
     font-weight: bold;
 }
 
-.pre-order {
-    color: #9f1510 !important;
+.stock,
+.cart_item
+{
+    .pre-order {
+        color: var(--wc-ssc-preorder);
+    }
+    
+    .enquiries-only {
+        color: var(--wc-ssc-enquiries);
+    }
+    
+    .discontinued {
+        color: var(--wc-ssc-discontinued);
+    }
 }
 
-.enquiries-only {
-    color: #9e22e6 !important;
-}
-
-.discontinued {
-    color: #888888 !important;
+.cart button,
+.cart .button
+{
+    .pre-order {
+        background-color: var(--wc-ssc-preorder);
+    }
+    
+    .enquiries-only {
+        background-color: var(--wc-ssc-enquiries);
+    }
+    
+    .discontinued {
+        background-color: var(--wc-ssc-discontinued);
+    }
 }

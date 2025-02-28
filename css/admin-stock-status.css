@@ -9,13 +9,13 @@ table.wp-list-table mark.discontinued
 }
 
 td.is_in_stock.column-is_in_stock .preorder {
-    color: #9f1510; /* Blue for Pre-order */
+    color: var(--wc-ssc-preorder);
 }
 
 td.is_in_stock.column-is_in_stock .enquiries {
-    color: #9e22e6; /* Purple for Enquiries Only */
+    color: var(--wc-ssc-enquiries);
 }
 
 td.is_in_stock.column-is_in_stock .discontinued {
-    color: #888888; /* Grey for Discontinued */
+    color: var(--wc-ssc-discontinued);
 }
