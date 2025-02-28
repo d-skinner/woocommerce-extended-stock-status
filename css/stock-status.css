@@ -1,4 +1,6 @@
 /* css/stock-status.css */
+@import "stock-status-colors.css";
+
 .stock::before
 {
 	content: 'Availability: ';

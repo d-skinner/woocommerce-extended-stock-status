@@ -1,4 +1,6 @@
 /* css/admin-stock-status.css */
+@import "stock-status-colors.css";
+
 table.wp-list-table mark.preorder,
 table.wp-list-table mark.enquiries,
 table.wp-list-table mark.discontinued
